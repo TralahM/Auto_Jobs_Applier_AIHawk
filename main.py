@@ -12,9 +12,9 @@ from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.chrome.service import Service as ChromeService
 from webdriver_manager.chrome import ChromeDriverManager
 import re
-from src.ai_hawk.libs.resume_and_cover_builder import ResumeFacade, ResumeGenerator, StyleManager
-from src.ai_hawk.resume_schemas.job_application_profile import JobApplicationProfile
-from src.ai_hawk.resume_schemas.resume import Resume
+from src.libs.resume_and_cover_builder import ResumeFacade, ResumeGenerator, StyleManager
+from src.resume_schemas.job_application_profile import JobApplicationProfile
+from src.resume_schemas.resume import Resume
 from src.logging import logger
 from src.utils.chrome_utils import init_browser
 from src.utils.constants import (
@@ -217,20 +217,24 @@ class FileManager:
         return uploads
 
 
-def create_cv(parameters: dict, llm_api_key: str):
+def create_cover_letter(parameters: dict, llm_api_key: str):
     """
     Logic to create a CV.
     """
     try:
         logger.info("Generating a CV based on provided parameters.")
 
-        # Load plain text resume
+        # Carica il resume in testo semplice
         with open(parameters["uploads"]["plainTextResume"], "r", encoding="utf-8") as file:
             plain_text_resume = file.read()
 
         style_manager = StyleManager()
         style_manager.choose_style()
-
+        questions = [
+    inquirer.Text('job_url', message="Please enter the URL of the job description:")
+        ]
+        answers = inquirer.prompt(questions)
+        job_url = answers.get('job_url')
         resume_generator = ResumeGenerator()
         resume_object = Resume(plain_text_resume)
         driver = init_browser()
@@ -243,23 +247,32 @@ def create_cv(parameters: dict, llm_api_key: str):
             output_path=Path("data_folder/output"),
         )
         resume_facade.set_driver(driver)
-        result_base64 = resume_facade.create_cover_letter("Software engineer with Java experience")         
+        resume_facade.link_to_job(job_url)
+        result_base64, suggested_name = resume_facade.create_cover_letter()         
 
-        # Decode Base64 to binary data
+        # Decodifica Base64 in dati binari
         try:
             pdf_data = base64.b64decode(result_base64)
         except base64.binascii.Error as e:
             logger.error("Error decoding Base64: %s", e)
             raise
 
-        # Define the output path
-        output_path = Path(parameters["outputFileDirectory"]) / "resume.pdf"
+        # Definisci il percorso della cartella di output utilizzando `suggested_name`
+        output_dir = Path(parameters["outputFileDirectory"]) / suggested_name
 
-        # Write binary data to the PDF file
+        # Crea la cartella se non esiste
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Cartella di output creata o già esistente: {output_dir}")
+        except IOError as e:
+            logger.error("Error creating output directory: %s", e)
+            raise
+        
+        output_path = output_dir / "cover_letter_tailored.pdf"
         try:
             with open(output_path, "wb") as file:
                 file.write(pdf_data)
-            logger.info(f"CV saved to {output_path}")
+            logger.info(f"CV salvato in: {output_path}")
         except IOError as e:
             logger.error("Error writing file: %s", e)
             raise
@@ -268,24 +281,129 @@ def create_cv(parameters: dict, llm_api_key: str):
         raise
 
 
-def create_cover_letter(parameters: dict, llm_api_key: str):
+def create_resume_pdf_job_tailored(parameters: dict, llm_api_key: str):
     """
-    Logic to create a cover letter.
+    Logic to create a CV.
     """
-    # try:
-    #     logger.info("Generating a cover letter based on provided parameters.")
-    #     # Example implementation for generating the letter
-    #     cover_letter_generator = CoverLetterGenerator(llm_api_key)
-    #     result = cover_letter_generator.generate(parameters)
-    #     output_path = Path(parameters["outputFileDirectory"]) / "cover_letter.docx"
-    #     with open(output_path, "w", encoding="utf-8") as file:
-    #         file.write(result)
-    #     logger.info(f"Cover letter saved to {output_path}")
-    # except Exception as e:
-    #     logger.exception(f"An error occurred while creating the cover letter: {e}")
-    #     raise
-    pass
+    try:
+        logger.info("Generating a CV based on provided parameters.")
 
+        # Carica il resume in testo semplice
+        with open(parameters["uploads"]["plainTextResume"], "r", encoding="utf-8") as file:
+            plain_text_resume = file.read()
+
+        style_manager = StyleManager()
+        style_manager.choose_style()
+        questions = [inquirer.Text('job_url', message="Please enter the URL of the job description:")]
+        answers = inquirer.prompt(questions)
+        job_url = answers.get('job_url')
+        resume_generator = ResumeGenerator()
+        resume_object = Resume(plain_text_resume)
+        driver = init_browser()
+        resume_generator.set_resume_object(resume_object)
+        resume_facade = ResumeFacade(            
+            api_key=llm_api_key,
+            style_manager=style_manager,
+            resume_generator=resume_generator,
+            resume_object=resume_object,
+            output_path=Path("data_folder/output"),
+        )
+        resume_facade.set_driver(driver)
+        resume_facade.link_to_job(job_url)
+        result_base64, suggested_name = resume_facade.create_resume_pdf_job_tailored()         
+
+        # Decodifica Base64 in dati binari
+        try:
+            pdf_data = base64.b64decode(result_base64)
+        except base64.binascii.Error as e:
+            logger.error("Error decoding Base64: %s", e)
+            raise
+
+        # Definisci il percorso della cartella di output utilizzando `suggested_name`
+        output_dir = Path(parameters["outputFileDirectory"]) / suggested_name
+
+        # Crea la cartella se non esiste
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Cartella di output creata o già esistente: {output_dir}")
+        except IOError as e:
+            logger.error("Error creating output directory: %s", e)
+            raise
+        
+        output_path = output_dir / "resume_tailored.pdf"
+        try:
+            with open(output_path, "wb") as file:
+                file.write(pdf_data)
+            logger.info(f"CV salvato in: {output_path}")
+        except IOError as e:
+            logger.error("Error writing file: %s", e)
+            raise
+    except Exception as e:
+        logger.exception(f"An error occurred while creating the CV: {e}")
+        raise
+
+
+def create_resume_pdf(parameters: dict, llm_api_key: str):
+    """
+    Logic to create a CV.
+    """
+    try:
+        logger.info("Generating a CV based on provided parameters.")
+
+        # Carica il resume in testo semplice
+        with open(parameters["uploads"]["plainTextResume"], "r", encoding="utf-8") as file:
+            plain_text_resume = file.read()
+
+        style_manager = StyleManager()
+        style_manager.choose_style()
+        questions = [inquirer.Text('job_url', message="Please enter the URL of the job description:")]
+        answers = inquirer.prompt(questions)
+        job_url = answers.get('job_url')
+        resume_generator = ResumeGenerator()
+        resume_object = Resume(plain_text_resume)
+        driver = init_browser()
+        resume_generator.set_resume_object(resume_object)
+        resume_facade = ResumeFacade(            
+            api_key=llm_api_key,
+            style_manager=style_manager,
+            resume_generator=resume_generator,
+            resume_object=resume_object,
+            output_path=Path("data_folder/output"),
+        )
+        resume_facade.set_driver(driver)
+        resume_facade.link_to_job(job_url)
+        result_base64, suggested_name = resume_facade.create_resume_pdf()         
+
+        # Decodifica Base64 in dati binari
+        try:
+            pdf_data = base64.b64decode(result_base64)
+        except base64.binascii.Error as e:
+            logger.error("Error decoding Base64: %s", e)
+            raise
+
+        # Definisci il percorso della cartella di output utilizzando `suggested_name`
+        output_dir = Path(parameters["outputFileDirectory"]) / suggested_name
+
+        # Crea la cartella se non esiste
+        try:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Cartella di output creata o già esistente: {output_dir}")
+        except IOError as e:
+            logger.error("Error creating output directory: %s", e)
+            raise
+        
+        output_path = output_dir / "resume.pdf"
+        try:
+            with open(output_path, "wb") as file:
+                file.write(pdf_data)
+            logger.info(f"CV salvato in: {output_path}")
+        except IOError as e:
+            logger.error("Error writing file: %s", e)
+            raise
+    except Exception as e:
+        logger.exception(f"An error occurred while creating the CV: {e}")
+        raise
+        
 def handle_inquiries(selected_actions: List[str], parameters: dict, llm_api_key: str):
     """
     Decide which function to call based on the selected user actions.
@@ -296,12 +414,18 @@ def handle_inquiries(selected_actions: List[str], parameters: dict, llm_api_key:
     """
     try:
         if selected_actions:
-            if "Create Cover Letter" in selected_actions:
-                logger.info("Creating a cover letter...")
+            if "Generate Resume" in selected_actions:
+                logger.info("Crafting a standout professional resume...")
+                create_resume_pdf(parameters, llm_api_key)
+                
+            if "Generate Resume Tailored for Job Description" in selected_actions:
+                logger.info("Customizing your resume to enhance your job application...")
+                create_resume_pdf_job_tailored(parameters, llm_api_key)
+                
+            if "Generate Tailored Cover Letter for Job Description" in selected_actions:
+                logger.info("Designing a personalized cover letter to enhance your job application...")
                 create_cover_letter(parameters, llm_api_key)
-            if "Create CV" in selected_actions:
-                logger.info("Creating a CV...")
-                create_cv(parameters, llm_api_key)
+
         else:
             logger.warning("No actions selected. Nothing to execute.")
     except Exception as e:
@@ -320,8 +444,9 @@ def prompt_user_action() -> str:
                 'action',
                 message="Select the action you want to perform:",
                 choices=[
-                    "Create Cover Letter",
-                    "Create CV",
+                    "Generate Resume",
+                    "Generate Resume Tailored for Job Description",
+                    "Generate Tailored Cover Letter for Job Description",
                 ],
             ),
         ]

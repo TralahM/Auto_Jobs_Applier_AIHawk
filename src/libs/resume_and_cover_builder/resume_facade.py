@@ -1,13 +1,15 @@
 """
-This module contains the FacadeManager class, which is responsible for managing the interaction between the user and the other components of the application.
+This module contains the FacadeManager class, which is responsible for managing the interaction between the user and other components of the application.
 """
 # app/libs/resume_and_cover_builder/manager_facade.py
-import logging
-import os
-
+import hashlib
 import inquirer
 from pathlib import Path
 
+from loguru import logger
+
+from src.libs.resume_and_cover_builder.llm.llm_job_parser import LLMParser
+from src.job import Job
 from src.utils.chrome_utils import HTML_to_PDF
 from .config import global_config
 
@@ -33,7 +35,7 @@ class ResumeFacade:
         self.style_manager = style_manager
         self.resume_generator = resume_generator
         self.resume_generator.set_resume_object(resume_object)
-        self.selected_style = None  # Proprietà per memorizzare lo stile selezionato
+        self.selected_style = None  # Property to store the selected style
     
     def set_driver(self, driver):
          self.driver = driver
@@ -76,36 +78,88 @@ class ResumeFacade:
         formatted_choices = self.style_manager.format_choices(styles)
         selected_choice = self.prompt_user(formatted_choices, "Which style would you like to adopt?")
         self.selected_style = selected_choice.split(' (')[0]
+        
+    def link_to_job(self, job_url):
+        self.driver.get(job_url)
+        self.driver.implicitly_wait(10)
+        body_element = self.driver.find_element("tag name", "body")
+        body_element = body_element.get_attribute("outerHTML")
+        self.llm_job_parser = LLMParser(openai_api_key=global_config.API_KEY)
+        self.llm_job_parser.set_body_html(body_element)
 
-    def create_resume_pdf(self, job_description_text=None) -> bytes:
+        self.job = Job()
+        self.job.role = self.llm_job_parser.extract_role()
+        self.job.company = self.llm_job_parser.extract_company_name()
+        self.job.description = self.llm_job_parser.extract_job_description()
+        self.job.location = self.llm_job_parser.extract_location()
+        self.job.link = job_url
+        logger.info(f"Extracting job details from URL: {job_url}")
+
+
+    def create_resume_pdf_job_tailored(self) -> tuple[bytes, str]:
         """
         Create a resume PDF using the selected style and the given job description text.
         Args:
+            job_url (str): The job URL to generate the hash for.
             job_description_text (str): The job description text to include in the resume.
         Returns:
-            bytes: The PDF content as bytes.
+            tuple: A tuple containing the PDF content as bytes and the unique filename.
         """
         if self.selected_style is None:
-            raise ValueError("Devi scegliere uno stile prima di generare il PDF.")
+            raise ValueError("You must choose a style before generating the PDF.")
         
         style_path = self.style_manager.get_style_path(self.selected_style)
 
-        if job_description_text is None:
-            html_resume = self.resume_generator.create_resume(style_path)
-        else:
-            html_resume = self.resume_generator.create_resume_job_description_text(style_path, job_description_text)
+        html_resume = self.resume_generator.create_resume_job_description_text(style_path, self.job.description)
+
+        # Generate a unique name using the job URL hash
+        suggested_name = hashlib.md5(self.job.link.encode()).hexdigest()[:10]
+        
         result = HTML_to_PDF(html_resume, self.driver)
         self.driver.quit()
-        return result
+        return result, suggested_name
     
-    def create_cover_letter(self, job_description_text: str) -> None:
+    
+    
+    def create_resume_pdf(self) -> tuple[bytes, str]:
         """
-        Create a cover letter based on the given job description text and format.
+        Create a resume PDF using the selected style and the given job description text.
         Args:
-            job_description_text (str): The job description text to include in the cover letter.
+            job_url (str): The job URL to generate the hash for.
+            job_description_text (str): The job description text to include in the resume.
+        Returns:
+            tuple: A tuple containing the PDF content as bytes and the unique filename.
         """
+        
+        if self.selected_style is None:
+            raise ValueError("You must choose a style before generating the PDF.")
+        
+        style_path = self.style_manager.get_style_path(self.selected_style)
+        html_resume = self.resume_generator.create_resume(style_path)
+        suggested_name = hashlib.md5(self.job.link.encode()).hexdigest()[:10]
+        result = HTML_to_PDF(html_resume, self.driver)
+        self.driver.quit()
+        return result, suggested_name
+
+    def create_cover_letter(self) -> tuple[bytes, str]:
+        """
+        Create a cover letter based on the given job description text and job URL.
+        Args:
+            job_url (str): The job URL to generate the hash for.
+            job_description_text (str): The job description text to include in the cover letter.
+        Returns:
+            tuple: A tuple containing the PDF content as bytes and the unique filename.
+        """
+        if self.selected_style is None:
+            raise ValueError("You must choose a style before generating the PDF.")
+        
         style_path = self.style_manager.get_style_path()
-        cover_letter_html = self.resume_generator.create_cover_letter_job_description(style_path, job_description_text)
+        cover_letter_html = self.resume_generator.create_cover_letter_job_description(style_path, self.job.description)
+
+        # Generate a unique name using the job URL hash
+        suggested_name = hashlib.md5(self.job.link.encode()).hexdigest()[:10]
+
+        
         result = HTML_to_PDF(cover_letter_html, self.driver)
         self.driver.quit()
-        return result
+        return result, suggested_name

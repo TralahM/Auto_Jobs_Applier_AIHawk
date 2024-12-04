@@ -4,7 +4,7 @@ Create a class that generates a resume based on a resume and a resume template.
 # app/libs/resume_and_cover_builder/gpt_resume.py
 import os
 import textwrap
-from src.ai_hawk.libs.resume_and_cover_builder.utils import LoggerChatModel
+from src.libs.resume_and_cover_builder.utils import LoggerChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI

@@ -1,4 +1,4 @@
-from src.ai_hawk.libs.resume_and_cover_builder.template_base import prompt_cover_letter_template
+from src.libs.resume_and_cover_builder.template_base import prompt_cover_letter_template
 
 
 cover_letter_template = """

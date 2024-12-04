@@ -20,7 +20,7 @@ class StyleManager:
         project_root = current_file.parent.parent.parent.parent  # Adatta se la struttura cambia
         
         # Imposta la directory degli stili in modo robusto
-        self.styles_directory = project_root / "ai_hawk" / "libs" / "resume_and_cover_builder" / "resume_style"
+        self.styles_directory = project_root / "src" / "libs" / "resume_and_cover_builder" / "resume_style"
         
         logging.debug(f"Project root determinato come: {project_root}")
         logging.debug(f"Directory degli stili impostata su: {self.styles_directory}")

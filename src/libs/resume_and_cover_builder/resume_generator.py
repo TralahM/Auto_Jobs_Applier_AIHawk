@@ -4,9 +4,9 @@ This module is responsible for generating resumes and cover letters using the LL
 # app/libs/resume_and_cover_builder/resume_generator.py
 from string import Template
 from typing import Any
-from src.ai_hawk.libs.resume_and_cover_builder.llm.llm_generate_resume import LLMResumer
-from src.ai_hawk.libs.resume_and_cover_builder.llm.llm_generate_resume_from_job import LLMResumeJobDescription
-from src.ai_hawk.libs.resume_and_cover_builder.llm.llm_generate_cover_letter_from_job import LLMCoverLetterJobDescription
+from src.libs.resume_and_cover_builder.llm.llm_generate_resume import LLMResumer
+from src.libs.resume_and_cover_builder.llm.llm_generate_resume_from_job import LLMResumeJobDescription
+from src.libs.resume_and_cover_builder.llm.llm_generate_cover_letter_from_job import LLMCoverLetterJobDescription
 from .module_loader import load_module
 from .config import global_config
 
@@ -42,3 +42,6 @@ class ResumeGenerator:
         cover_letter_html = gpt_answerer.generate_cover_letter()
         template = Template(global_config.html_template)
         return template.substitute(body=cover_letter_html, style_path=style_path)
+    
+    
+    
