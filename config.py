@@ -1,6 +1,6 @@
 # In this file, you can set the configurations of the app.
 
-from constants import DEBUG, LLM_MODEL, OPENAI
+from src.utils.constants import DEBUG, LLM_MODEL, OPENAI
 
 #config related to logging must have prefix LOG_
 LOG_LEVEL = DEBUG
